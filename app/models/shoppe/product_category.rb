@@ -7,8 +7,8 @@ module Shoppe
     # :restrict_with_exception relies on a fix to the awesome_nested_set gem
     # which has been referenced in the Gemfile as we can't add a dependency
     # to a branch in the .gemspec
-    acts_as_nested_set  dependent: :restrict_with_exception,
-                        after_move: :set_ancestral_permalink
+    acts_as_nested_set  dependent: :restrict_with_exception
+    after_move :set_ancestral_permalink_of_self_and_descendants
 
     self.table_name = 'shoppe_product_categories'
 
@@ -33,8 +33,7 @@ module Shoppe
     scope :ordered, -> { includes(:translations).order(:name) }
     
     # Set the permalink on callback
-    before_validation :set_permalink, :set_ancestral_permalink
-    after_save :set_child_permalinks
+    before_validation :set_permalink
 
     def attachments=(attrs)
       if attrs["image"]["file"].present? then self.attachments.build(attrs["image"]) end
@@ -68,17 +67,10 @@ module Shoppe
       self.permalink = self.name.parameterize if self.permalink.blank? && self.name.is_a?(String)
     end
 
-    def set_ancestral_permalink
-      permalinks = Array.new
-      self.ancestors.each do |category|
-        permalinks << category.permalink
-      end
-      self.ancestral_permalink = permalinks.join '/'
-    end
-
-    def set_child_permalinks
-      self.children.each do |category|
-        category.save!  # save forces children to update their ancestral_permalink
+    def set_ancestral_permalink_of_self_and_descendants
+      self.self_and_descendants.each do |category|
+        category.ancestral_permalink = category.ancestors.map(&:permalink).join '/'
+        category.save! if category.changed?
       end
     end
 
